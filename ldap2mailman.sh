@@ -1,5 +1,5 @@
 #! /bin/bash
-#----------------------------------------
+#-----------------------------------------
 #          	LDAP2Mailman
 #
 # Synchronise une branche LDAP vers avec
@@ -13,11 +13,11 @@
 #   Creative Commons 4.0 BY NC SA
 #
 #         http://goo.gl/lriKvn
-#----------------------------------------
+#-----------------------------------------
 
+# Déclaration des variables
 VERSION="LDAP2Mailman v0.3 -- 2013, Yvan Godard [godardyvan@gmail.com]"
 help="no"
-SCRIPT_NAME=$(basename $0)
 SCRIPT_DIR=$(dirname $0)
 LIST_MEMBERS=$(mktemp /tmp/ldap2mailman_email_list_members.XXXXX)
 LIST_SENDERS=$(mktemp /tmp/ldap2mailman_email_list_senders.XXXXX)
@@ -48,7 +48,7 @@ help () {
 	echo -e "avec :"
 	echo -e "\t-h:                               affiche l'aide et quitte"
 	echo -e "\t*** Paramètres obligatoires ***"
-	echo -e "\t-d <Racine LDAP> :                DN de (ex : dc=serveur,dc=office,dc=com)"
+	echo -e "\t-d <Racine LDAP> :                DN de la racine LDAP (ex : dc=serveur,dc=office,dc=com)"
 	echo -e "\t-a <DN relatif Admin LDAP> :      DN relatif de l'administrateur LDAP (ex : uid=diradmin,cn=users)"
 	echo -e "\t-p <Mot de passe Admin LDAP> :    Mot de passe de l'administrateur LDAP (sera demandé si manquant)"
 	echo -e "\t-g <DN relatif du groupe> :       DN relatif du groupe LDAP utilisé comme source (ex : cn=mongroupe,cn=groups)"
@@ -73,7 +73,9 @@ error () {
 
 alldone () {
 	exec 1>&6 6>&-
+	# Journalisation si besoin
 	[ $LOG_ACTIVE -eq 1 ] && cat $LOG_TEMP >> $LOG
+	# Renvoi du journal courant vers la sortie standard
 	[ $LOG_ACTIVE -ne 1 ] && cat $LOG_TEMP
 	[ $EMAIL_LEVEL -ne 0 ] && [ $1 -ne 0 ] && cat $LOG_TEMP | mail -s "[ERROR : ldap2mailman.sh] liste $LISTNAME (groupe LDAP $LDAPGROUP,$DNBASE)" ${EMAIL_ADRESSE}
 	[ $EMAIL_LEVEL -eq 2 ] && [ $1 -eq 0 ] && cat $LOG_TEMP | mail -s "[OK : ldap2mailman.sh] liste $LISTNAME (groupe LDAP $LDAPGROUP,$DNBASE)" ${EMAIL_ADRESSE}
@@ -137,23 +139,18 @@ if [[ ${PASS} = "" ]]
 	read -s PASS
 fi
 
+# Redirection de la sortie vers un fichier temporaire
 exec 6>&1
 exec >> $LOG_TEMP
 
+# Ouverture du log temporaire
 echo ""
 echo "****************************** `date` ******************************"
 echo ""
 echo "$0 lancé pour la liste $LISTNAME" 
 echo "(groupe LDAP $LDAPGROUP,$DNBASE)"
 
-[ -f $LIST_MEMBERS ] && rm $LIST_MEMBERS
-[ -f $LIST_CLEAN_MEMBERS ] && rm $LIST_CLEAN_MEMBERS
-[ -f $LIST_SENDERS ] && rm $LIST_SENDERS
-[ -f $LIST_CLEAN_SENDERS ] && rm $LIST_CLEAN_SENDERS
-[ -f $ACTUAL_LIST_CONFIG ] && rm $ACTUAL_LIST_CONFIG
-[ -f $NEW_LIST_CONFIG ] && rm $NEW_LIST_CONFIG
-[ -f $NEW_LIST_CONFIG_TEMP ] && rm $NEW_LIST_CONFIG_TEMP
-
+# Test du paramètre d'envoi d'email et vérification de la cohérence de l'adresse email
 if [[ ${EMAIL_REPORT} = "forcemail" ]]
 	then
 	EMAIL_LEVEL=2
@@ -198,6 +195,7 @@ elif [[ ${EMAIL_REPORT} = "nomail" ]]
 	EMAIL_LEVEL=0
 fi
 
+# Vérification de la présence préalable de la Liste Mailman à synchroniser
 echo ""
 echo "Test de la présence de la liste Mailman"
 if [ -f $MAILMAN_BIN/list_lists ] 
@@ -213,10 +211,11 @@ else
 	error "$MAILMAN_BIN/list_lists absent.\nMerci de vérifier votre installation Mailman."
 fi
 
+# Vérification de la connection au serveur LDAP
 echo ""
 echo "Recherche LDAP sur $URL ..."
 echo ""
-ldapsearch -LLL -H $URL -D $LDAPADMIN,$DNBASE -b $LDAPGROUP,$DNBASE -w $PASS memberUid
+
 # Test de la connexion au LDAP
 ldapsearch -LLL -H $URL -D $LDAPADMIN,$DNBASE -b $LDAPGROUP,$DNBASE -w $PASS > /dev/null 2>&1
 if [ $? -ne 0 ]
