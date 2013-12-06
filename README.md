@@ -8,7 +8,7 @@ Cet outil est destiné à assurer la synchronisation des adresses emails d'un gr
 La liste Mailman doit être préalablement créée sous Mailman avant d'utiliser cet outil.
 
 Pour une aide complète, installer le script et lancez le :
-    # ./ldap2mailman.sh help
+    `# ./ldap2mailman.sh help`
 
 
 Bug report
@@ -21,7 +21,7 @@ Installation
 ---------
 
 Pour installer cet outil, depuis votre terminal :
-	# git clone https://github.com/yvangodard/ldap2mailman.git ; sudo chmod -R 750 ldap2mailman
+	`# git clone https://github.com/yvangodard/ldap2mailman.git ; sudo chmod -R 750 ldap2mailman`
 
 
 License
