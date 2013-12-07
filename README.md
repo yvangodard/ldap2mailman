@@ -8,7 +8,8 @@ Cet outil est destiné à assurer la synchronisation des adresses emails d'un gr
 La liste Mailman doit être préalablement créée sous Mailman avant d'utiliser cet outil.
 
 Pour une aide complète, installer le script et lancez le :
-    `# ./ldap2mailman.sh help`
+
+    ./ldap2mailman.sh help
 
 
 Bug report
@@ -21,7 +22,9 @@ Installation
 ---------
 
 Pour installer cet outil, depuis votre terminal :
-	`# git clone https://github.com/yvangodard/ldap2mailman.git ; sudo chmod -R 750 ldap2mailman`
+
+	git clone https://github.com/yvangodard/ldap2mailman.git ; 
+	sudo chmod -R 750 ldap2mailman
 
 
 License
@@ -35,7 +38,7 @@ Ce script ldap2mailman.sh de [Yvan GODARD](http://www.yvangodard.me) est mis à 
 Limitations
 -----------
 
-THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY
+THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS "AS IS" AND ANY
 EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 DISCLAIMED. IN NO EVENT SHALL THE REGENTS AND CONTRIBUTORS BE LIABLE FOR ANY
