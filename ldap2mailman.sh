@@ -144,11 +144,8 @@ exec 6>&1
 exec >> $LOG_TEMP
 
 # Ouverture du log temporaire
-echo ""
-echo "****************************** `date` ******************************"
-echo ""
-echo "$0 lancé pour la liste $LISTNAME" 
-echo "(groupe LDAP $LDAPGROUP,$DNBASE)"
+echo -e "\n****************************** `date` ******************************\n"
+echo -e "$0 lancé pour la liste $LISTNAME\n(groupe LDAP $LDAPGROUP,$DNBASE)\n"
 
 # Test du paramètre d'envoi d'email et vérification de la cohérence de l'adresse email
 if [[ ${EMAIL_REPORT} = "forcemail" ]]
@@ -156,14 +153,12 @@ if [[ ${EMAIL_REPORT} = "forcemail" ]]
 	EMAIL_LEVEL=2
 	if [[ -z $EMAIL_ADRESSE ]]
 		then
-		echo ""
 		echo -e "Vous utilisez l'option -e $EMAIL_REPORT mais vous n'avez pas entré d'adressse email.\n\t-> Nous continuons le processus sans envoi d'email."
 		EMAIL_LEVEL=0
 	else
-		echo "${EMAIL_ADRESSE}" | grep '^[a-zA-Z0-9]*@[a-zA-Z0-9]*\.[a-zA-Z0-9]*$' > /dev/null 2>&1
+		echo "${EMAIL_ADRESSE}" | grep '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]*\.[a-zA-Z0-9._-]*$' > /dev/null 2>&1
 		if [ $? -ne 0 ]
 			then
-			echo ""
     		echo -e "L'adresse d'envoi des rapport ($EMAIL_ADRESSE) ne semble pas valide.\n\t-> Nous continuons le processus sans envoi d'email."
     		EMAIL_LEVEL=0
     	fi
@@ -173,22 +168,19 @@ elif [[ ${EMAIL_REPORT} = "onerror" ]]
 	EMAIL_LEVEL=1
 	if [[ -z $EMAIL_ADRESSE ]]
 		then
-		echo ""
 		echo -e "Vous utilisez l'option -e $EMAIL_REPORT mais vous n'avez pas entré d'adressse email.\n\t-> Nous continuons le processus sans envoi d'email."
 		EMAIL_LEVEL=0
 	else
-		echo "${EMAIL_ADRESSE}" | grep '^[a-zA-Z0-9]*@[a-zA-Z0-9]*\.[a-zA-Z0-9]*$' > /dev/null 2>&1
+		echo "${EMAIL_ADRESSE}" | grep '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]*\.[a-zA-Z0-9._-]*$' > /dev/null 2>&1
 		if [ $? -ne 0 ]
 			then	
-			echo ""
     		echo -e "L'adresse d'envoi des rapport ($EMAIL_ADRESSE) ne semble pas valide.\n\t-> Nous continuons le processus sans envoi d'email."
     		EMAIL_LEVEL=0
     	fi
     fi
 elif [[ ${EMAIL_REPORT} != "nomail" ]]
 	then
-	echo ""
-	echo -e "L'option -e $EMAIL_REPORT est invalide (valeurs possibles : onerror|forcemail|nomail).\n\t-> Nous continuons le processus sans envoi d'email."
+	echo -e "\nL'option -e $EMAIL_REPORT est invalide (valeurs possibles : onerror|forcemail|nomail).\n\t-> Nous continuons le processus sans envoi d'email."
 	EMAIL_LEVEL=0
 elif [[ ${EMAIL_REPORT} = "nomail" ]]
 	then
@@ -196,8 +188,7 @@ elif [[ ${EMAIL_REPORT} = "nomail" ]]
 fi
 
 # Vérification de la présence préalable de la Liste Mailman à synchroniser
-echo ""
-echo "Test de la présence de la liste Mailman"
+echo -e "\nTest de la présence de la liste Mailman"
 if [ -f $MAILMAN_BIN/list_lists ] 
 	then  
 	$MAILMAN_BIN/list_lists | grep -i $LISTNAME > /dev/null 2>&1
@@ -212,9 +203,7 @@ else
 fi
 
 # Vérification de la connection au serveur LDAP
-echo ""
-echo "Recherche LDAP sur $URL ..."
-echo ""
+echo -e "\nRecherche LDAP sur $URL ...\n"
 
 # Test de la connexion au LDAP
 ldapsearch -LLL -H $URL -D $LDAPADMIN,$DNBASE -b $LDAPGROUP,$DNBASE -w $PASS > /dev/null 2>&1
@@ -283,8 +272,7 @@ do
     echo ""
 done
 
-echo "*************"
-echo "Pour info, LIST_MEMBERS :"
+echo -e "*************\nPour info, LIST_MEMBERS :"
 cat $LIST_MEMBERS
 echo "*************"
 if [ -f $LIST_SENDERS ] && [[ ! -z $(cat $LIST_SENDERS) ]] 
@@ -294,8 +282,7 @@ if [ -f $LIST_SENDERS ] && [[ ! -z $(cat $LIST_SENDERS) ]]
 	echo "*************"
 fi
 
-echo ""
-echo "Traitement des listes avec le script $SCRIPT_DIR/clean-email-list.py"
+echo -e "\nTraitement des listes avec le script $SCRIPT_DIR/clean-email-list.py"
 if [ -f $SCRIPT_DIR/clean-email-list.py ] 
 	then 
 	$SCRIPT_DIR/clean-email-list.py $LIST_MEMBERS > $LIST_CLEAN_MEMBERS
@@ -303,9 +290,8 @@ if [ -f $SCRIPT_DIR/clean-email-list.py ]
 else
 	error "$SCRIPT_DIR/clean-email-list.py absent.\nMerci d'installer ce sous-script.\nVous pouvez le trouver à l'adresse https://github.com/yvangodard/ldap2mailman."
 fi
-echo ""
 
-echo "*************"
+echo -e "\n*************"
 echo "Pour info, LIST_CLEAN_MEMBERS :"
 cat $LIST_CLEAN_MEMBERS
 echo "*************"
@@ -317,8 +303,7 @@ if [ -f $LIST_CLEAN_SENDERS ] && [[ ! -z $(cat $LIST_CLEAN_SENDERS) ]]
 fi
 
 # Lancement de la commande synchronisation de la liste
-echo ""
-echo "Traiement de la liste avec la commande $MAILMAN_BIN/sync_members $OPTIONS_MAILMAN -f $LIST_CLEAN_MEMBERS $LISTNAME"
+echo -e "\nTraiement de la liste avec la commande $MAILMAN_BIN/sync_members $OPTIONS_MAILMAN -f $LIST_CLEAN_MEMBERS $LISTNAME"
 if [ -f $MAILMAN_BIN/sync_members ] 
 	then 
 	echo -e "Résultat de la commande : "
@@ -366,8 +351,7 @@ if [ -f $MAILMAN_BIN/config_list ]
 		echo -e "\t-> Nouvelle configuration :"
 		cat $NEW_LIST_CONFIG_TEMP | perl -p -e 's/\n//g' > $NEW_LIST_CONFIG
 		cat $NEW_LIST_CONFIG
-		echo ""
-		echo "Import de la liste des emails secondaires dans la variable 'accept_these_nonmembers' de la liste Mailman"
+		echo -e "\nImport de la liste des emails secondaires dans la variable 'accept_these_nonmembers' de la liste Mailman"
 		$MAILMAN_BIN/config_list -i $NEW_LIST_CONFIG $LISTNAME
 		if [ $? -ne 0 ] 
 			then
