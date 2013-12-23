@@ -1,33 +1,36 @@
 #! /bin/bash
 #-----------------------------------------
-#          	LDAP2Mailman
+#             LDAP2Mailman
 #
-# Synchronise une branche LDAP vers avec
-#	   	  une liste Mailman
+# Synchronize LDAP Group to Mailman liste
+#	   	     (one way only)
 #
 #             Yvan Godard 
-#        godardyvan@gmail.com
+#         godardyvan@gmail.com
 #
-#	Version 0.3 -- 6 décembre 2013
-#         Soumis à la licence 
-#   Creative Commons 4.0 BY NC SA
+#	Version 0.4 -- december, 20 2013
+#            Under Licence
+#    Creative Commons 4.0 BY NC SA
 #
 #         http://goo.gl/lriKvn
 #-----------------------------------------
 
-# Déclaration des variables
-VERSION="LDAP2Mailman v0.3 -- 2013, Yvan Godard [godardyvan@gmail.com]"
+# Variables initialisation
+VERSION="LDAP2Mailman v0.4 -- 2013, Yvan Godard [godardyvan@gmail.com]"
 help="no"
 SCRIPT_DIR=$(dirname $0)
+SCRIPT_NAME=$(basename $0)
 LIST_MEMBERS=$(mktemp /tmp/ldap2mailman_email_list_members.XXXXX)
 LIST_SENDERS=$(mktemp /tmp/ldap2mailman_email_list_senders.XXXXX)
+LIST_USERS=$(mktemp /tmp/ldap2mailman_email_list_users.XXXXX)
 LIST_CLEAN_MEMBERS=$(mktemp /tmp/ldap2mailman_email_list_clean_members.XXXXX)
 LIST_CLEAN_SENDERS=$(mktemp /tmp/ldap2mailman_email_list_clean_senders.XXXXX)
 ACTUAL_LIST_CONFIG=$(mktemp /tmp/ldap2mailman_actual_list_config.XXXXX)
 NEW_LIST_CONFIG=$(mktemp /tmp/ldap2mailman_new_list_config.XXXXX)
 NEW_LIST_CONFIG_TEMP=$(mktemp /tmp/ldap2mailman_new_list_config_temp.XXXXX)
 URL="ldap://127.0.0.1"
-OPTIONS_MAILMAN="-a=no -d=no -w=no -g=no"
+DN_USER_BRANCH="cn=users"
+MAILMAN_OPTIONS="-a=no -d=no -w=no -g=no"
 MAILMAN_BIN="/usr/lib/mailman/bin"
 EMAIL_REPORT="nomail"
 EMAIL_LEVEL=0
@@ -37,55 +40,70 @@ LOG_TEMP=$(mktemp /tmp/ldap2mailman_log.XXXXX)
 
 help () {
 	echo -e "$VERSION\n"
-	echo -e "Cet outil est destiné à assurer la synchronisation des adresses emails d'un groupe LDAP (branche) avec une liste Mailman."
-	echo -e "La liste Mailman doit être préalablement créée sous Mailman avant d'utiliser cet outil."
-	echo -e "\nDégagement de responsabilité :"
-	echo -e "Cet outil est mis à disposition gracieuse sans aucun support ou aucune garantie."
-	echo -e "L'auteur ne peut être tenu pour responsables des dommages causés à votre système d'information en cas d'utilisation."
-	echo -e "\nUsage :"
-	echo -e "\t$0 [-h] | -d <Racine LDAP> -a <DN relatif Admin LDAP> -p <Mot de passe Admin LDAP> -g <DN relatif du groupe> -l <Liste Mailman>"
-	echo -e "\t         [-s <Serveur LDAP>] [-D <Domaine principal>] [-m <Options Liste Mailman>] [-b <Chemin bin Mailman>] [-e <Option rapport email>] [-E <Adresse email>] [-j <Fichier Log>]"
-	echo -e "avec :"
-	echo -e "\t-h:                               affiche l'aide et quitte"
-	echo -e "\t*** Paramètres obligatoires ***"
-	echo -e "\t-d <Racine LDAP> :                DN de la racine LDAP (ex : dc=serveur,dc=office,dc=com)"
-	echo -e "\t-a <DN relatif Admin LDAP> :      DN relatif de l'administrateur LDAP (ex : uid=diradmin,cn=users)"
-	echo -e "\t-p <Mot de passe Admin LDAP> :    Mot de passe de l'administrateur LDAP (sera demandé si manquant)"
-	echo -e "\t-g <DN relatif du groupe> :       DN relatif du groupe LDAP utilisé comme source (ex : cn=mongroupe,cn=groups)"
-	echo -e "\t-l <Liste Mailman> :              Nom de la liste existante sur Mailman"
-	echo -e "\t*** Paramètres optionnels ***"
-	echo -e "\t-s <Serveur LDAP> :               URL du serveur LDAP [$URL]"
-	echo -e "\t-D <Domaine principal> :          Domaine email principal prioritaire si l'utilisateur dispose de plusieurs adresses email enregistrées dans le LDAP (ex : mondomaine.fr)"
-	echo -e "\t-m <Options Liste Mailman> :      Paramètres passés pour l'exécution de la commande Mailman 'sync_members' [$OPTIONS_MAILMAN]"
-	echo -e "\t-b <Chemin bin Mailman> :         Chemin vers vers le répertoire Bin de votre installation Mailman [$MAILMAN_BIN]"
-	echo -e "\t-e <Option rapport email> :       Paramètres pour l'envoi d'un rapport par email : [$EMAIL_REPORT] (ex : onerror|forcemail|nomail)"
-	echo -e "\t-E <Adresse email> :              Adresse du rapport par email (obligatoire si -e forcemail ou -e onerror)"
-	echo -e "\t-j <Fichier Log> :                Active la journalisation à place de la sortie standard. Préciser en argument le chemin complet vers le fichier Log [$LOG] ou utiliser la valeur 'default' pour $LOG"
+	echo -e "This tool is designed to synchronize email addresses from an LDAP group to a Mailman list."
+	echo -e "It works both with LDAP groups defined by objectClass posixGroup or groupOfNames."
+	echo -e "Mailman list must first be created in Mailman before using this tool."
+	echo -e "\nDisclamer:"
+	echo -e "This tool is provide without any support and guarantee."
+	echo -e "\nSynopsis:"
+	echo -e "./$SCRIPT_NAME [-h] | -d <base namespace> -a <UID of LDAP admin> -p <LDAP admin password>" 
+	echo -e "                   -t <LDAP group objectClass> -g <relative DN of LDAP group> -l <Mailman list name>"
+	echo -e "                  [-s <LDAP server>] [-u <relative DN of user banch>] [-D <main damain>]"
+	echo -e "                  [-m <Mailman sync options>] [-b <<Mailman bin path>]"
+	echo -e "                  [-e <email report option>] [-E <email address>] [-j <log file>]"
+	echo -e "\n\t-h:                             prints this help then exit"
+	echo -e "\nMandatory options:"
+	echo -e "\t-d <base namespace>:              the base DN for each LDAP entry (i.e.: 'dc=server,dc=office,dc=com')"
+	echo -e "\t-a <UID of LDAP admin>:           UID of the LDAP administrator (i.e.: 'diradmin')"
+	echo -e "\t-p <LDAP admin password>:         the password of the LDAP administrator (asked if missing)"
+	echo -e "\t-t <LDAP group objectClass>:      the type of group you want to sync, must be 'posixGroup' or 'groupOfNames'"	
+	echo -e "\t-g <relative DN of LDAP group>:   the relative DN of the LDAP group to sync to Mailman list (i.e.: 'cn=mygroup,cn=groups or cn=mygroup,ou=lists')"
+	echo -e "\t-l <Mailman list name>:           the name of the existing list to populate on Mailman"
+	echo -e "\nOptional options:"
+	echo -e "\t-s <LDAP server>:                 the LDAP server URL (default: '$URL')"
+	echo -e "\t-u <relative DN of user banch>:   the relative DN of the LDAP branch that contains the users (i.e.: 'cn=allusers', default: '$DN_USER_BRANCH')"
+	echo -e "\t-D <main damain>:                 main domain if the user has multiple email addresses registered in the LDAP (i.e.: 'mydomain.fr')"
+	echo -e "\t-m <Mailman sync options>:        are the parameters passed to mailman's sync_members command (default: '$MAILMAN_OPTIONS')"
+	echo -e "\t-b <Mailman bin path>:            path to the bin directory of your Mailman installation (default: '$MAILMAN_BIN')"
+	echo -e "\t-e <email report option>:         settings for sending a report by email, must be 'onerror', 'forcemail' or 'nomail' (default: '$EMAIL_REPORT')"
+	echo -e "\t-E <email address>:               email address to send the report (must be filled if '-e forcemail' or '-e onerror' options is used)"
+	echo -e "\t-j <log file>:                    enables logging instead of standard output. Specify an argument for the full path to the log file"
+	echo -e "\t                                  (i.e.: '$LOG') or use 'default' ($LOG)"
 	exit 0
 }
 
 error () {
-	echo -e "*** Erreur ***"
+	echo -e "\n*** Error ***"
 	echo -e ${1}
 	echo -e "\n"${VERSION}
 	alldone 1
 }
 
 alldone () {
+	# Remove temp files
+	[ -f $LIST_USERS ] && rm $LIST_USERS
+	[ -f $LIST_MEMBERS ] && rm $LIST_MEMBERS
+	[ -f $LIST_CLEAN_MEMBERS ] && rm $LIST_CLEAN_MEMBERS
+	[ -f $LIST_SENDERS ] && rm $LIST_SENDERS
+	[ -f $LIST_CLEAN_SENDERS ] && rm $LIST_CLEAN_SENDERS
+	[ -f $ACTUAL_LIST_CONFIG ] && rm $ACTUAL_LIST_CONFIG
+	[ -f $NEW_LIST_CONFIG ] && rm $NEW_LIST_CONFIG
+	[ -f $NEW_LIST_CONFIG_TEMP ] && rm $NEW_LIST_CONFIG_TEMP
+	# Redirect standard outpout
 	exec 1>&6 6>&-
-	# Journalisation si besoin
+	# Logging if neaded 
 	[ $LOG_ACTIVE -eq 1 ] && cat $LOG_TEMP >> $LOG
-	# Renvoi du journal courant vers la sortie standard
+	# Print current log to standard outpout
 	[ $LOG_ACTIVE -ne 1 ] && cat $LOG_TEMP
-	[ $EMAIL_LEVEL -ne 0 ] && [ $1 -ne 0 ] && cat $LOG_TEMP | mail -s "[ERROR : ldap2mailman.sh] liste $LISTNAME (groupe LDAP $LDAPGROUP,$DNBASE)" ${EMAIL_ADRESSE}
-	[ $EMAIL_LEVEL -eq 2 ] && [ $1 -eq 0 ] && cat $LOG_TEMP | mail -s "[OK : ldap2mailman.sh] liste $LISTNAME (groupe LDAP $LDAPGROUP,$DNBASE)" ${EMAIL_ADRESSE}
+	[ $EMAIL_LEVEL -ne 0 ] && [ $1 -ne 0 ] && cat $LOG_TEMP | mail -s "[ERROR : ldap2mailman.sh] list $LISTNAME (LDAP group $LDAPGROUP,$DNBASE)" ${EMAIL_ADDRESS}
+	[ $EMAIL_LEVEL -eq 2 ] && [ $1 -eq 0 ] && cat $LOG_TEMP | mail -s "[OK : ldap2mailman.sh] list $LISTNAME (LDAP group $LDAPGROUP,$DNBASE)" ${EMAIL_ADDRESS}
 	rm $LOG_TEMP
 	exit ${1}
 }
 
 optsCount=0
 
-while getopts "hd:a:p:g:l:s:D:m:b:e:E:j:" OPTION
+while getopts "hd:a:p:t:g:l:s:u:D:m:b:e:E:j:" OPTION
 do
 	case "$OPTION" in
 		h)	help="yes"
@@ -93,10 +111,13 @@ do
 		d)	DNBASE=${OPTARG}
 			let optsCount=$optsCount+1
 						;;
-		a)	LDAPADMIN=${OPTARG}
+		a)	LDAPADMIN_UID=${OPTARG}
 			let optsCount=$optsCount+1
 						;;
 		p)	PASS=${OPTARG}
+                        ;;
+        t)	LDAPGROUP_OBJECTCLASS=${OPTARG}
+			let optsCount=$optsCount+1
                         ;;
 		g)	LDAPGROUP=${OPTARG}
 			let optsCount=$optsCount+1
@@ -106,15 +127,17 @@ do
                         ;;
 	    s) 	URL=${OPTARG}
 						;;
+		u) 	DN_USER_BRANCH=${OPTARG}
+						;;
 		D)	DOMAIN=${OPTARG}
                         ;;
-        m)	OPTIONS_MAILMAN=${OPTARG}
+        m)	MAILMAN_OPTIONS=${OPTARG}
                         ;; 
         b)	MAILMAN_BIN=${OPTARG}
                         ;;
         e)	EMAIL_REPORT=${OPTARG}
                         ;;                             
-        E)	EMAIL_ADRESSE=${OPTARG}
+        E)	EMAIL_ADDRESS=${OPTARG}
                         ;;
         j)	[ $OPTARG != "default" ] && LOG=${OPTARG}
 			LOG_ACTIVE=1
@@ -122,7 +145,7 @@ do
 	esac
 done
 
-if [[ ${optsCount} != "4" ]]
+if [[ ${optsCount} != "5" ]]
 	then
         help
         alldone 1
@@ -135,205 +158,239 @@ fi
 
 if [[ ${PASS} = "" ]]
 	then
-	echo "Entrez le mot de passe pour $LDAPADMIN,$DNBASE :" 
+	echo "Password for $LDAPADMIN_UID,$DN_USER_BRANCH,$DNBASE?" 
 	read -s PASS
 fi
 
-# Redirection de la sortie vers un fichier temporaire
+# Redirect standard outpout to temp file
 exec 6>&1
 exec >> $LOG_TEMP
 
-# Ouverture du log temporaire
+# Start temp log file
 echo -e "\n****************************** `date` ******************************\n"
-echo -e "$0 lancé pour la liste $LISTNAME\n(groupe LDAP $LDAPGROUP,$DNBASE)\n"
+echo -e "$0 started for Mailmman list $LISTNAME\n(LDAP group $LDAPGROUP,$DNBASE)\n"
 
-# Test du paramètre d'envoi d'email et vérification de la cohérence de l'adresse email
+# Test of sending email parameter and check the consistency of the parameter email address
 if [[ ${EMAIL_REPORT} = "forcemail" ]]
 	then
 	EMAIL_LEVEL=2
-	if [[ -z $EMAIL_ADRESSE ]]
+	if [[ -z $EMAIL_ADDRESS ]]
 		then
-		echo -e "Vous utilisez l'option -e $EMAIL_REPORT mais vous n'avez pas entré d'adressse email.\n\t-> Nous continuons le processus sans envoi d'email."
+		echo -e "You use option '-e $EMAIL_REPORT'  but you have not entered any email info.\n\t-> We continue the process without sending email."
 		EMAIL_LEVEL=0
 	else
-		echo "${EMAIL_ADRESSE}" | grep '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]*\.[a-zA-Z0-9._-]*$' > /dev/null 2>&1
+		echo "${EMAIL_ADDRESS}" | grep '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]*\.[a-zA-Z0-9._-]*$' > /dev/null 2>&1
 		if [ $? -ne 0 ]
 			then
-    		echo -e "L'adresse d'envoi des rapport ($EMAIL_ADRESSE) ne semble pas valide.\n\t-> Nous continuons le processus sans envoi d'email."
+    		echo -e "This address '$EMAIL_ADDRESS' does not seem valid.\n\t-> We continue the process without sending email."
     		EMAIL_LEVEL=0
     	fi
     fi
 elif [[ ${EMAIL_REPORT} = "onerror" ]]
 	then
 	EMAIL_LEVEL=1
-	if [[ -z $EMAIL_ADRESSE ]]
+	if [[ -z $EMAIL_ADDRESS ]]
 		then
-		echo -e "Vous utilisez l'option -e $EMAIL_REPORT mais vous n'avez pas entré d'adressse email.\n\t-> Nous continuons le processus sans envoi d'email."
+		echo -e "You use option '-e $EMAIL_REPORT'  but you have not entered any email info.\n\t-> We continue the process without sending email."
 		EMAIL_LEVEL=0
 	else
-		echo "${EMAIL_ADRESSE}" | grep '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]*\.[a-zA-Z0-9._-]*$' > /dev/null 2>&1
+		echo "${EMAIL_ADDRESS}" | grep '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]*\.[a-zA-Z0-9._-]*$' > /dev/null 2>&1
 		if [ $? -ne 0 ]
 			then	
-    		echo -e "L'adresse d'envoi des rapport ($EMAIL_ADRESSE) ne semble pas valide.\n\t-> Nous continuons le processus sans envoi d'email."
+    		echo -e "This address '$EMAIL_ADDRESS' does not seem valid.\n\t-> We continue the process without sending email."
     		EMAIL_LEVEL=0
     	fi
     fi
 elif [[ ${EMAIL_REPORT} != "nomail" ]]
 	then
-	echo -e "\nL'option -e $EMAIL_REPORT est invalide (valeurs possibles : onerror|forcemail|nomail).\n\t-> Nous continuons le processus sans envoi d'email."
+	echo -e "\nOption '-e $EMAIL_REPORT' is not valid (must be: 'onerror', 'forcemail' or 'nomail').\n\t-> We continue the process without sending email."
 	EMAIL_LEVEL=0
 elif [[ ${EMAIL_REPORT} = "nomail" ]]
 	then
 	EMAIL_LEVEL=0
 fi
 
-# Vérification de la présence préalable de la Liste Mailman à synchroniser
-echo -e "\nTest de la présence de la liste Mailman"
+# Verification of LDAPGROUP_OBJECTCLASS parameter
+[[ ${LDAPGROUP_OBJECTCLASS} != "posixGroup" ]] && [[ ${LDAPGROUP_OBJECTCLASS} != "groupOfNames" ]] && error "Parameter '-t ${LDAPGROUP_OBJECTCLASS}' is not correct.\n-t must be 'posixGroup' or 'groupOfNames'"
+
+# Verification of presence of the Mailman list to populate
+echo -e "\nTest for the presence of Mailman list"
 if [ -f $MAILMAN_BIN/list_lists ] 
 	then  
 	$MAILMAN_BIN/list_lists | grep -i $LISTNAME > /dev/null 2>&1
 	if [ $? -ne 0 ] 
 		then
-		error "La liste Mailman que vous essayez de synchroniser n'existe pas.\nMerci de créer préalablement la liste avant de relancer cette commande."
+		error "Mailman list you try to sync does not exist.\nPlease create the list before re-launching this tool."
 	else
-		echo -e "\t-> La liste Mailman semble correcte."
+		echo -e "\t-> Mailman list seems correct."
 	fi
 else
-	error "$MAILMAN_BIN/list_lists absent.\nMerci de vérifier votre installation Mailman."
+	error "$MAILMAN_BIN/list_lists is missing.\Check your Mailman installation."
 fi
 
-# Vérification de la connection au serveur LDAP
-echo -e "\nRecherche LDAP sur $URL ...\n"
+# LDAP connection test
+echo -e "\nConnecting LDAP at $URL ...\n"
 
-# Test de la connexion au LDAP
-ldapsearch -LLL -H $URL -D $LDAPADMIN,$DNBASE -b $LDAPGROUP,$DNBASE -w $PASS > /dev/null 2>&1
+LDAP_COMMAND_BEGIN="ldapsearch -LLL -H $URL -D uid=$LDAPADMIN_UID,$DN_USER_BRANCH,$DNBASE -b $LDAPGROUP,$DNBASE -w $PASS"
+echo "LDAP_COMMAND_BEGIN = $LDAP_COMMAND_BEGIN"
+$LDAP_COMMAND_BEGIN > /dev/null 2>&1
 if [ $? -ne 0 ]
 	then 
-	error "Erreur de connexion au serveur LDAP.\nVérifiez votre URL et les identifiants de connexion."
+	error "Error connecting to LDAP server.\nPlease verify your URL and user/pass."
 fi
-# Test si la liste des usagers n'est pas vide
-if [[ -z $(ldapsearch -LLL -H $URL -D $LDAPADMIN,$DNBASE -b $LDAPGROUP,$DNBASE -w $PASS member | grep member: | awk '{print $2}' | awk -F',' '{ print $1 }') ]] 
-	then 
-	error "Liste d'usagers du groupe LDAP vide."
+
+# Test if user list is not empty
+if [[ ${LDAPGROUP_OBJECTCLASS} = "groupOfNames" ]] 
+	then
+	if [[ -z $($LDAP_COMMAND_BEGIN member | grep member: | awk '{print $2}' | awk -F',' '{print $1}') ]] 
+		then 
+		error "User list on LDAP group is empty!"
+	else
+		$LDAP_COMMAND_BEGIN member | grep member: | awk '{print $2}' | awk -F',' '{print $1}' >> $LIST_USERS
+	fi
+elif [[ ${LDAPGROUP_OBJECTCLASS} = "posixGroup" ]]
+	then
+	if [[ -z $($LDAP_COMMAND_BEGIN memberUid | grep memberUid: | awk '{print $2}' | sed -e 's/^./uid=&/g') ]] 
+		then 
+		error "User list on LDAP group is empty"
+	else
+		$LDAP_COMMAND_BEGIN memberUid | grep memberUid: | awk '{print $2}' | sed -e 's/^./uid=&/g' >> $LIST_USERS
+	fi
 fi
-# Traitement des utilisateurs
-for USER in `ldapsearch -LLL -H $URL -D $LDAPADMIN,$DNBASE -b $LDAPGROUP,$DNBASE -w $PASS member | grep member: | awk '{print $2}' | awk -F',' '{ print $1 }'`
+
+echo "cat LIST_USERS:"
+cat $LIST_USERS
+
+# Processing each user
+for USER in $(cat $LIST_USERS)
 do
-	EMAIL_PRINCIPAL=""
-    echo "- Traitement de l'usager : $USER"
+	PRINCIPAL_EMAIL=""
+    echo "- Processing user: $USER"
     EMAILS=$(mktemp /tmp/mailman_emails.XXXXX)
-    EMAILS_SECONDAIRES=$(mktemp /tmp/mailman_email_secondaires.XXXXX)
-    ldapsearch -LLL -H $URL -D $LDAPADMIN,$DNBASE -b "cn=users,"$DNBASE -w $PASS -x $USER mail | grep mail: | awk '{print $2}' | grep '.' | sed '/^$/d' | awk '!x[$0]++' >> $EMAILS
-    NOMBRE_DE_LIGNES=$(cat $EMAILS | grep "." | wc -l) 
-    echo -e "\tNombre de lignes emails : $NOMBRE_DE_LIGNES"
-    # Cas 1 : pas d'email -> skip
+    SECONDARY_EMAILS=$(mktemp /tmp/mailman_secondry_emails.XXXXX)
+    ldapsearch -LLL -H $URL -D uid=$LDAPADMIN_UID,$DN_USER_BRANCH,$DNBASE -b $DN_USER_BRANCH,$DNBASE -w $PASS -x $USER mail | grep mail: | awk '{print $2}' | grep '.' | sed '/^$/d' | awk '!x[$0]++' >> $EMAILS
+    LINES_NUMBER=$(cat $EMAILS | grep "." | wc -l) 
+    echo -e "\tNumber of lines/emails: $LINES_NUMBER"
+    # If no email -> skip
     if [[ -z $(cat $EMAILS) ]] 
     	then
     	echo -e "\tPas d'email"
-    # Cas 2 : un seul email -> on garde celui-là
-    elif [ $NOMBRE_DE_LIGNES -eq 1 ]
+    # If only one mail, keep this mail
+    elif [ $LINES_NUMBER -eq 1 ]
     	then
-    	EMAIL_PRINCIPAL=$(head -n 1 $EMAILS)
-    	echo -e "\tUn seul email : $EMAIL_PRINCIPAL"
-    # Cas 3 : plusieurs emails
-	elif [ $NOMBRE_DE_LIGNES -gt 1 ]
+    	PRINCIPAL_EMAIL=$(head -n 1 $EMAILS)
+    	echo -e "\tOnly one email address: $PRINCIPAL_EMAIL"
+    # If multiples mails
+	elif [ $LINES_NUMBER -gt 1 ]
     	then
-    	echo -e "\tPlusieurs emails ont été trouvés pour cet utilisateur."
+    	echo -e "\tMultiples email addresses found."
 
     	if [[ -z $DOMAIN ]]
-    		# Pas de domaine principal défini, on garde le premier email
+    		# No main domain defined -> keep first mail
     		then
-    		EMAIL_PRINCIPAL=$(head -n 1 $EMAILS)
-	    	echo -e "\t-> Nous gardons le premier email de l'utilisateur : $EMAIL_PRINCIPAL"
+    		PRINCIPAL_EMAIL=$(head -n 1 $EMAILS)
+	    	echo -e "\t-> Keep first one: $PRINCIPAL_EMAIL"
 	    else
-	    	# Paramètre domaine principal défini : on cherche si un email contient le domaine principal 
+	    	# Main domain defined -> search first mail in domain
 	    	cat $EMAILS | grep $DOMAIN > /dev/null 2>&1
 	    	if [ $? -ne 0 ]
 	    		then
-	    		EMAIL_PRINCIPAL=$(head -n 1 $EMAILS)
-	    		echo -e "\t-> Pas d'email contenant le domaine, nous gardons le premier email de l'utilisateur : $EMAIL_PRINCIPAL"		
+	    		PRINCIPAL_EMAIL=$(head -n 1 $EMAILS)
+	    		echo -e "\t-> No email containing the main domain defined, we keep the first user email: $PRINCIPAL_EMAIL"		
 	    	else
-	    		EMAIL_PRINCIPAL=$(cat $EMAILS | grep $DOMAIN | head -n 1)
-	    		echo -e "\t-> Email contenant le domaine, nous gardons l'adresse : $EMAIL_PRINCIPAL"
+	    		PRINCIPAL_EMAIL=$(cat $EMAILS | grep $DOMAIN | head -n 1)
+	    		echo -e "\t-> Email with main domaine found: $PRINCIPAL_EMAIL"
 	    	fi
 	    fi
-	    # Création d'une liste des personnes autorisées à envoyer
-	    cat $EMAILS | grep -v ${EMAIL_PRINCIPAL} >> $EMAILS_SECONDAIRES
-	    echo -e "\tListe des expéditeurs également autorisés :"
-	    # cat $EMAILS_SECONDAIRES
-	    echo -e "\t-> $(cat $EMAILS_SECONDAIRES | perl -p -e 's/\n/ - /g')"
+	    # Creating list of address authorized to send email
+	    cat $EMAILS | grep -v ${PRINCIPAL_EMAIL} >> $SECONDARY_EMAILS
+	    echo -e "\tAllowed senders list:"
+	    echo -e "\t-> $(cat $SECONDARY_EMAILS | perl -p -e 's/\n/ - /g' | awk 'sub( "...$", "" )')"
     fi
-    # Ajout de l'adresse à la liste et des emails secondaires à la liste des senders
-    echo $EMAIL_PRINCIPAL >> $LIST_MEMBERS
-    [[ -z $(cat $EMAILS_SECONDAIRES) ]] || cat $EMAILS_SECONDAIRES >> $LIST_SENDERS
-    # Suppression des fichiers temporaire d'emails
+    # AAdd address to allowed senders list
+    echo $PRINCIPAL_EMAIL >> $LIST_MEMBERS
+    [[ -z $(cat $SECONDARY_EMAILS) ]] || cat $SECONDARY_EMAILS >> $LIST_SENDERS
+    # Remove email temp files 
     rm $EMAILS
-    rm $EMAILS_SECONDAIRES
+    rm $SECONDARY_EMAILS
     echo ""
 done
 
-echo -e "*************\nPour info, LIST_MEMBERS :"
+echo -e "*************\nFor information, LIST_MEMBERS:"
 cat $LIST_MEMBERS
 echo "*************"
 if [ -f $LIST_SENDERS ] && [[ ! -z $(cat $LIST_SENDERS) ]] 
 	then
-	echo "Pour info, LIST_SENDERS :"
+	echo "For information, LIST_SENDERS:"
 	cat $LIST_SENDERS
 	echo "*************"
 fi
 
-echo -e "\nTraitement des listes avec le script $SCRIPT_DIR/clean-email-list.py"
+# Installing $SCRIPT_DIR/clean-email-list.py if needed
+if [ ! -f $SCRIPT_DIR/clean-email-list.py ] 
+	then
+	echo -e "\nInstalling $SCRIPT_DIR/clean-email-list.py..."
+	wget -O $SCRIPT_DIR/clean-email-list.py --no-check-certificate https://raw.github.com/yvangodard/ldap2mailman/master/clean-email-list.py 
+	if [ $? -ne 0 ] 
+		then
+		ERROR_MESSAGE=$(echo $?)
+		error "Error while downloading https://raw.github.com/yvangodard/ldap2mailman/master/clean-email-list.py.\n$ERROR_MESSAGE.\nYou need to solve this before re-launching this tool."
+	else
+		echo -e "\t-> Installation OK"
+		chmod +x $SCRIPT_DIR/clean-email-list.py
+	fi
+fi
+
+echo -e "\nProcessing the lists with $SCRIPT_DIR/clean-email-list.py"
 if [ -f $SCRIPT_DIR/clean-email-list.py ] 
 	then 
 	$SCRIPT_DIR/clean-email-list.py $LIST_MEMBERS > $LIST_CLEAN_MEMBERS
 	[ -f $LIST_SENDERS ] && [[ ! -z $(cat $LIST_SENDERS) ]] && $SCRIPT_DIR/clean-email-list.py $LIST_SENDERS > $LIST_CLEAN_SENDERS
 else
-	error "$SCRIPT_DIR/clean-email-list.py absent.\nMerci d'installer ce sous-script.\nVous pouvez le trouver à l'adresse https://github.com/yvangodard/ldap2mailman."
+	error "$SCRIPT_DIR/clean-email-list.py missing.\nTry to install it manually before re-launching this tool.\nGo to https://github.com/yvangodard/ldap2mailman."
 fi
 
 echo -e "\n*************"
-echo "Pour info, LIST_CLEAN_MEMBERS :"
+echo "For information, LIST_CLEAN_MEMBERS:"
 cat $LIST_CLEAN_MEMBERS
 echo "*************"
 if [ -f $LIST_CLEAN_SENDERS ] && [[ ! -z $(cat $LIST_CLEAN_SENDERS) ]]
 	then
-	echo "Pour info, LIST_CLEAN_SENDERS :"
+	echo "For information, LIST_CLEAN_SENDERS:"
 	cat $LIST_CLEAN_SENDERS
 	echo "*************"
 fi
 
-# Lancement de la commande synchronisation de la liste
-echo -e "\nTraiement de la liste avec la commande $MAILMAN_BIN/sync_members $OPTIONS_MAILMAN -f $LIST_CLEAN_MEMBERS $LISTNAME"
+# Sync with Mailman
+echo -e "\nList processing with command: $MAILMAN_BIN/sync_members $MAILMAN_OPTIONS -f $LIST_CLEAN_MEMBERS $LISTNAME"
 if [ -f $MAILMAN_BIN/sync_members ] 
 	then 
-	echo -e "Résultat de la commande : "
-	$MAILMAN_BIN/sync_members $OPTIONS_MAILMAN -f $LIST_CLEAN_MEMBERS $LISTNAME
+	echo -e "Result of the command: "
+	$MAILMAN_BIN/sync_members $MAILMAN_OPTIONS -f $LIST_CLEAN_MEMBERS $LISTNAME
 	if [ $? -ne 0 ] 
 		then
-		ERROR_MESSAGE=$(echo $?)
-		error "Problème lors de l'utilisation de la commande $MAILMAN_BIN/sync_members.\n$ERROR_MESSAGE.\nUtilisez le man de Mailman pour corriger ce problème."
+		ERROR_MESSAGE1=$(echo $?)
+		error "Error with the command: $MAILMAN_BIN/sync_members.\n$ERROR_MESSAGE1.\nPlease try solving this with Mailman's man."
 	fi
 else
-	error "$MAILMAN_BIN/sync_members absent.\nMerci de vérifier votre installation Mailman."
+	error "$MAILMAN_BIN/sync_members.\nCheck your Mailman installation."
 fi
 
 if [ -f $MAILMAN_BIN/config_list ]
 	then
-	# Si la liste senders n'est pas vide nous allons ajouter ces emails à la configuration de la liste Mailman (variable accept_these_nonmembers = [])
+	# If list is not empty we add allowed senders (variable accept_these_nonmembers = [])
 	if [ -f $LIST_CLEAN_SENDERS ] && [[ ! -z $(cat $LIST_CLEAN_SENDERS) ]]
 		then
 		echo ""
-		# Récupérons le contenu actuel de la configuration de la liste
+		# Saving actual configuration of the list
 		$MAILMAN_BIN/config_list -o $ACTUAL_LIST_CONFIG $LISTNAME
-		# Vérifions si il y a déjà des emails 
+		# Checking if there is already some allowed non members
 		grep "accept_these_nonmembers = \['" $ACTUAL_LIST_CONFIG > /dev/null 2>&1
 		if [ $? -ne 0 ] 
 			then
-			# Pas d'ancienne liste
-			echo "Pas d'ancienne liste d'emails secondaires détectée dans la variable 'accept_these_nonmembers' de la liste Mailman"
+			echo "No old list of secondary emails detected in the variable 'accept_these_nonmembers' in the Mailman list"
 		else
-			# Il y a une ancienne liste
-			echo "Récupération des anciens emails autorisés à poster sur la liste (variable 'accept_these_nonmembers' de la liste Mailman) :"
+			echo "Saving emails actually set in variable 'accept_these_nonmembers' in the Mailman list:"
 			LIST=$(grep "accept_these_nonmembers = " $ACTUAL_LIST_CONFIG | sed -e 's/.*\[\(.*\)\].*/\1/' | sed "s/,/\n/g" | sed "s/ //g" | sed "s/'//g")
 			echo $LIST | perl -p -e 's/ / - /g'
 			for OLD_ADDRESS in $LIST
@@ -348,35 +405,27 @@ if [ -f $MAILMAN_BIN/config_list ]
 			echo "'$NEW_ADDRESS', " >> $NEW_LIST_CONFIG_TEMP
 		done
 		echo "]" >> $NEW_LIST_CONFIG_TEMP
-		echo -e "\t-> Nouvelle configuration :"
+		echo -e "\t-> New config:"
 		cat $NEW_LIST_CONFIG_TEMP | perl -p -e 's/\n//g' > $NEW_LIST_CONFIG
 		cat $NEW_LIST_CONFIG
-		echo -e "\nImport de la liste des emails secondaires dans la variable 'accept_these_nonmembers' de la liste Mailman"
+		echo -e "\nImporting new emails list in the variable 'accept_these_nonmembers' in the Mailman list"
 		$MAILMAN_BIN/config_list -i $NEW_LIST_CONFIG $LISTNAME
 		if [ $? -ne 0 ] 
 			then
 			ERROR_MESSAGE=$(echo $?)
-			error "Problème lors de l'utilisation de la commande $MAILMAN_BIN/config_list -i $NEW_LIST_CONFIG $LISTNAME.\n$ERROR_MESSAGE."
+			error "Error while running command: $MAILMAN_BIN/config_list -i $NEW_LIST_CONFIG $LISTNAME.\n$ERROR_MESSAGE."
 		else
 			echo -e "\t-> Import OK"
 		fi
 	fi
 else
 	echo ""
-	error "Problème lors de l'utilisation de la commande $MAILMAN_BIN/config_list.\nUtilisez le man de Mailman pour corriger ce problème ou vérifiez votre installation."
+	error -e "Error while running command: $MAILMAN_BIN/config_list.\nPlease try solving this with Mailman's man or check your Mailman installation"
 fi
 
 echo ""
 
-[ -f $LIST_MEMBERS ] && rm $LIST_MEMBERS
-[ -f $LIST_CLEAN_MEMBERS ] && rm $LIST_CLEAN_MEMBERS
-[ -f $LIST_SENDERS ] && rm $LIST_SENDERS
-[ -f $LIST_CLEAN_SENDERS ] && rm $LIST_CLEAN_SENDERS
-[ -f $ACTUAL_LIST_CONFIG ] && rm $ACTUAL_LIST_CONFIG
-[ -f $NEW_LIST_CONFIG ] && rm $NEW_LIST_CONFIG
-[ -f $NEW_LIST_CONFIG_TEMP ] && rm $NEW_LIST_CONFIG_TEMP
-
-echo "****************************** RÉSULTAT FINAL ******************************"
-echo "$0 terminé pour la liste $LISTNAME (groupe LDAP $LDAPGROUP,$DNBASE)"
+echo "****************************** FINAL RESULT ******************************"
+echo -e "$0 finished for Mailmman list $LISTNAME\n(LDAP group $LDAPGROUP,$DNBASE)"
 
 alldone 0
