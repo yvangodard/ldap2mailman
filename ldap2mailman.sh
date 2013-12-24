@@ -46,7 +46,7 @@ help () {
 	echo -e "\nDisclamer:"
 	echo -e "This tool is provide without any support and guarantee."
 	echo -e "\nSynopsis:"
-	echo -e "./$SCRIPT_NAME [-h] | -d <base namespace> -a <UID of LDAP admin> -p <LDAP admin password>" 
+	echo -e "./$SCRIPT_NAME [-h] | -d <base namespace> -a <LDAP admin UID> -p <LDAP admin password>" 
 	echo -e "                   -t <LDAP group objectClass> -g <relative DN of LDAP group> -l <Mailman list name>"
 	echo -e "                  [-s <LDAP server>] [-u <relative DN of user banch>] [-D <main damain>]"
 	echo -e "                  [-m <Mailman sync options>] [-b <<Mailman bin path>]"
@@ -54,10 +54,10 @@ help () {
 	echo -e "\n\t-h:                             prints this help then exit"
 	echo -e "\nMandatory options:"
 	echo -e "\t-d <base namespace>:              the base DN for each LDAP entry (i.e.: 'dc=server,dc=office,dc=com')"
-	echo -e "\t-a <UID of LDAP admin>:           UID of the LDAP administrator (i.e.: 'diradmin')"
+	echo -e "\t-a <LDAP admin UID>:              LDAP administrator UID (i.e.: 'diradmin')"
 	echo -e "\t-p <LDAP admin password>:         the password of the LDAP administrator (asked if missing)"
 	echo -e "\t-t <LDAP group objectClass>:      the type of group you want to sync, must be 'posixGroup' or 'groupOfNames'"	
-	echo -e "\t-g <relative DN of LDAP group>:   the relative DN of the LDAP group to sync to Mailman list (i.e.: 'cn=mygroup,cn=groups or cn=mygroup,ou=lists')"
+	echo -e "\t-g <relative DN of LDAP group>:   the relative DN of the LDAP group to sync to Mailman list (i.e.: 'cn=mygroup,cn=groups' or 'cn=mygroup,ou=lists')"
 	echo -e "\t-l <Mailman list name>:           the name of the existing list to populate on Mailman"
 	echo -e "\nOptional options:"
 	echo -e "\t-s <LDAP server>:                 the LDAP server URL (default: '$URL')"
@@ -91,7 +91,7 @@ alldone () {
 	[ -f $NEW_LIST_CONFIG_TEMP ] && rm $NEW_LIST_CONFIG_TEMP
 	# Redirect standard outpout
 	exec 1>&6 6>&-
-	# Logging if neaded 
+	# Logging if needed 
 	[ $LOG_ACTIVE -eq 1 ] && cat $LOG_TEMP >> $LOG
 	# Print current log to standard outpout
 	[ $LOG_ACTIVE -ne 1 ] && cat $LOG_TEMP
@@ -176,7 +176,7 @@ if [[ ${EMAIL_REPORT} = "forcemail" ]]
 	EMAIL_LEVEL=2
 	if [[ -z $EMAIL_ADDRESS ]]
 		then
-		echo -e "You use option '-e $EMAIL_REPORT'  but you have not entered any email info.\n\t-> We continue the process without sending email."
+		echo -e "You use option '-e $EMAIL_REPORT' but you have not entered any email info.\n\t-> We continue the process without sending email."
 		EMAIL_LEVEL=0
 	else
 		echo "${EMAIL_ADDRESS}" | grep '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]*\.[a-zA-Z0-9._-]*$' > /dev/null 2>&1
@@ -191,7 +191,7 @@ elif [[ ${EMAIL_REPORT} = "onerror" ]]
 	EMAIL_LEVEL=1
 	if [[ -z $EMAIL_ADDRESS ]]
 		then
-		echo -e "You use option '-e $EMAIL_REPORT'  but you have not entered any email info.\n\t-> We continue the process without sending email."
+		echo -e "You use option '-e $EMAIL_REPORT' but you have not entered any email info.\n\t-> We continue the process without sending email."
 		EMAIL_LEVEL=0
 	else
 		echo "${EMAIL_ADDRESS}" | grep '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]*\.[a-zA-Z0-9._-]*$' > /dev/null 2>&1
@@ -232,7 +232,6 @@ fi
 echo -e "\nConnecting LDAP at $URL ...\n"
 
 LDAP_COMMAND_BEGIN="ldapsearch -LLL -H $URL -D uid=$LDAPADMIN_UID,$DN_USER_BRANCH,$DNBASE -b $LDAPGROUP,$DNBASE -w $PASS"
-echo "LDAP_COMMAND_BEGIN = $LDAP_COMMAND_BEGIN"
 $LDAP_COMMAND_BEGIN > /dev/null 2>&1
 if [ $? -ne 0 ]
 	then 
@@ -257,9 +256,6 @@ elif [[ ${LDAPGROUP_OBJECTCLASS} = "posixGroup" ]]
 		$LDAP_COMMAND_BEGIN memberUid | grep memberUid: | awk '{print $2}' | sed -e 's/^./uid=&/g' >> $LIST_USERS
 	fi
 fi
-
-echo "cat LIST_USERS:"
-cat $LIST_USERS
 
 # Processing each user
 for USER in $(cat $LIST_USERS)
