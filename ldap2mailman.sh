@@ -305,7 +305,7 @@ do
     fi
     # AAdd address to allowed senders list
     echo $PRINCIPAL_EMAIL >> $LIST_MEMBERS
-    [[ -z $(cat $SECONDARY_EMAILS) ]] || cat $SECONDARY_EMAILS >> $LIST_SENDERS
+    [[ ! -z $(cat $SECONDARY_EMAILS) ]] && cat $SECONDARY_EMAILS >> $LIST_SENDERS
     # Remove email temp files 
     rm $EMAILS
     rm $SECONDARY_EMAILS
