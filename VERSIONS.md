@@ -4,12 +4,23 @@ Versions
 ###Legend:
 \+ Added feature
 
-\* Improved/changed feature
+\* Improved / changed feature
 
 \- Bug fixed
 
 \! Known issue / missing feature
 
+#### 0.6
+------------
+\* improved syntax: variable protection
+
+\+ ability to use the script without bind with ldap administrator (without -a & -p parameters)
+
+#### 0.5
+------------
+\* correction damain -> domain
+
+\- delete '-x' parameter in ldapdearch 
 
 
 #### 0.4
