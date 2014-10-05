@@ -53,26 +53,26 @@ help () {
 	echo -e "./$SCRIPT_NAME [-h] | -d <base namespace> -t <LDAP group objectClass> -g <relative DN of LDAP group> -l <Mailman list name>" 
 	echo -e "                  [-s <LDAP server>] [-a <LDAP admin UID>] [-p <LDAP admin password>]"
 	echo -e "                  [-u <relative DN of user banch>] [-D <main domain>]"
-	echo -e "                  [-m <Mailman sync options>] [-b <<Mailman bin path>]"
+	echo -e "                  [-m <Mailman sync options>] [-b <Mailman bin path>]"
 	echo -e "                  [-e <email report option>] [-E <email address>] [-j <log file>]"
 	echo -e "\n\t-h:                             prints this help then exit"
 	echo -e "\nMandatory options:"
-	echo -e "\t-d <base namespace>:              the base DN for each LDAP entry (i.e.: 'dc=server,dc=office,dc=com')"
+	echo -e "\t-d <base namespace>:              the base DN for each LDAP entry (e.g.: 'dc=server,dc=office,dc=com')"
 	echo -e "\t-t <LDAP group objectClass>:      the type of group you want to sync, must be 'posixGroup' or 'groupOfNames'"	
-	echo -e "\t-g <relative DN of LDAP group>:   the relative DN of the LDAP group to sync to Mailman list (i.e.: 'cn=mygroup,cn=groups' or 'cn=mygroup,ou=lists')"
+	echo -e "\t-g <relative DN of LDAP group>:   the relative DN of the LDAP group to sync to Mailman list (e.g.: 'cn=mygroup,cn=groups' or 'cn=mygroup,ou=lists')"
 	echo -e "\t-l <Mailman list name>:           the name of the existing list to populate on Mailman"
 	echo -e "\nOptional options:"
 	echo -e "\t-s <LDAP server>:                 the LDAP server URL (default: '${URL}')"
-	echo -e "\t-a <LDAP admin UID>:              LDAP administrator UID, if bind is needed to access LDAP (i.e.: 'diradmin')"
+	echo -e "\t-a <LDAP admin UID>:              LDAP administrator UID, if bind is needed to access LDAP (e.g.: 'diradmin')"
 	echo -e "\t-p <LDAP admin password>:         the password of the LDAP administrator (asked if missing)"
-	echo -e "\t-u <relative DN of user banch>:   the relative DN of the LDAP branch that contains the users (i.e.: 'cn=allusers', default: '${DN_USER_BRANCH}')"
-	echo -e "\t-D <main domain>:                 main domain if the user has multiple email addresses registered in the LDAP (i.e.: 'mydomain.fr')"
+	echo -e "\t-u <relative DN of user banch>:   the relative DN of the LDAP branch that contains the users (e.g.: 'cn=allusers', default: '${DN_USER_BRANCH}')"
+	echo -e "\t-D <main domain>:                 main domain if the user has multiple email addresses registered in the LDAP (e.g.: 'mydomain.fr')"
 	echo -e "\t-m <Mailman sync options>:        are the parameters passed to mailman's sync_members command (default: '${MAILMAN_OPTIONS}')"
 	echo -e "\t-b <Mailman bin path>:            path to the bin directory of your Mailman installation (default: '${MAILMAN_BIN}')"
 	echo -e "\t-e <email report option>:         settings for sending a report by email, must be 'onerror', 'forcemail' or 'nomail' (default: '${EMAIL_REPORT}')"
 	echo -e "\t-E <email address>:               email address to send the report (must be filled if '-e forcemail' or '-e onerror' options is used)"
 	echo -e "\t-j <log file>:                    enables logging instead of standard output. Specify an argument for the full path to the log file"
-	echo -e "\t                                  (i.e.: '${LOG}') or use 'default' (${LOG})"
+	echo -e "\t                                  (e.g.: '${LOG}') or use 'default' (${LOG})"
 	exit 0
 }
 
@@ -306,7 +306,7 @@ do
 	    		echo -e "\t-> No email containing the main domain defined, we keep the first user email: ${PRINCIPAL_EMAIL}"		
 	    	else
 	    		PRINCIPAL_EMAIL=$(cat ${EMAILS} | grep ${DOMAIN} | head -n 1)
-	    		echo -e "\t-> Email with main domaine found: ${PRINCIPAL_EMAIL}"
+	    		echo -e "\t-> Email with main domain found: ${PRINCIPAL_EMAIL}"
 	    	fi
 	    fi
 	    # Creating list of address authorized to send email
@@ -314,7 +314,7 @@ do
 	    echo -e "\tAllowed senders list:"
 	    echo -e "\t-> $(cat ${SECONDARY_EMAILS} | perl -p -e 's/\n/ - /g' | awk 'sub( "...$", "" )')"
     fi
-    # AAdd address to allowed senders list
+    # Add address to allowed senders list
     echo ${PRINCIPAL_EMAIL} >> ${LIST_MEMBERS}
     [[ ! -z $(cat ${SECONDARY_EMAILS}) ]] && cat ${SECONDARY_EMAILS} >> ${LIST_SENDERS}
     # Remove email temp files 
@@ -427,7 +427,7 @@ if [ -f ${MAILMAN_BIN}/config_list ]
 	fi
 else
 	echo ""
-	error -e "Error while running command: ${MAILMAN_BIN}/config_list.\nPlease try solving this with Mailman's man or check your Mailman installation"
+	error "Error while running command: ${MAILMAN_BIN}/config_list.\nPlease try solving this with Mailman's man or check your Mailman installation"
 fi
 
 echo ""
