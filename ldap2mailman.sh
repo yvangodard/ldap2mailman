@@ -111,7 +111,7 @@ function base64decode () {
 	if [ $? -eq 0 ] 
 		then
 		VALUE=$(echo ${1} | grep :: | awk '{print $2}' | openssl enc -base64 -d )
-		ATTRIBUTE=$(echo ${1} | grep :: | awk '{print $1}' | awk 'sub( ".$", "" )' )
+		# ATTRIBUTE=$(echo ${1} | grep :: | awk '{print $1}' | awk 'sub( ".$", "" )' )
 		echo "${VALUE}"
 	else
 		VALUE=$(echo ${1} | grep : | awk '{print $2}')
