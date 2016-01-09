@@ -10,7 +10,7 @@
 #              Yvan Godard                 #
 #          godardyvan@gmail.com            #
 #                                          #
-#     Version 0.6 -- january, 28 2014      #
+#     Version 0.7 -- january, 10 2015      #
 #             Under Licence                #
 #     Creative Commons 4.0 BY NC SA        #
 #                                          #
@@ -19,7 +19,7 @@
 #------------------------------------------#
 
 # Variables initialisation
-VERSION="LDAP2Mailman v0.6 - 2014, Yvan Godard [godardyvan@gmail.com]"
+VERSION="LDAP2Mailman v0.7 - 2015, Yvan Godard [godardyvan@gmail.com]"
 help="no"
 SCRIPT_DIR=$(dirname $0)
 SCRIPT_NAME=$(basename $0)
@@ -83,7 +83,7 @@ error () {
 	alldone 1
 }
 
-alldone () {
+function alldone () {
 	# Remove temp files
 	[ -f ${LIST_USERS} ] && rm ${LIST_USERS}
 	[ -f ${LIST_MEMBERS} ] && rm ${LIST_MEMBERS}
@@ -103,6 +103,19 @@ alldone () {
 	[ ${EMAIL_LEVEL} -eq 2 ] && [ ${1} -eq 0 ] && cat ${LOG_TEMP} | mail -s "[OK : ldap2mailman.sh] list ${LISTNAME} (LDAP group $LDAPGROUP,$DNBASE)" ${EMAIL_ADDRESS}
 	rm ${LOG_TEMP}
 	exit ${1}
+}
+
+# Fonction utilisée plus tard pour les résultats de requêtes LDAP encodées en base64
+function base64decode () {
+	echo ${1} | grep :: > /dev/null 2>&1
+	if [ $? -eq 0 ] 
+		then
+		VALUE=$(echo ${1} | grep :: | awk '{print $2}' | openssl enc -base64 -d )
+		ATTRIBUTE=$(echo ${1} | grep :: | awk '{print $1}' | awk 'sub( ".$", "" )' )
+		echo "${ATTRIBUTE} ${VALUE}"
+	else
+		echo ${1}
+	fi
 }
 
 optsCount=0
@@ -238,7 +251,6 @@ fi
 # LDAP connection test
 echo -e "\nConnecting LDAP at $URL ...\n"
 
-
 [[ ${WITH_LDAP_BIND} = "yes" ]] && LDAP_COMMAND_BEGIN="ldapsearch -LLL -H ${URL} -b ${LDAPGROUP},${DNBASE} -D uid=${LDAPADMIN_UID},${DN_USER_BRANCH},${DNBASE} -w ${PASS}"
 [[ ${WITH_LDAP_BIND} = "no" ]] && LDAP_COMMAND_BEGIN="ldapsearch -LLL -H ${URL} -b ${LDAPGROUP},${DNBASE} -x"
 
@@ -273,19 +285,29 @@ do
 	PRINCIPAL_EMAIL=""
     echo "- Processing user: ${USER}"
     EMAILS=$(mktemp /tmp/mailman_emails.XXXXX)
+    EMAILS_CLEAN=$(mktemp /tmp/mailman_emails_clean.XXXXX)
     SECONDARY_EMAILS=$(mktemp /tmp/mailman_secondry_emails.XXXXX)
     [[ ${WITH_LDAP_BIND} = "yes" ]] && ldapsearch -LLL -H ${URL} -D uid=${LDAPADMIN_UID},${DN_USER_BRANCH},${DNBASE} -b ${DN_USER_BRANCH},${DNBASE} -w ${PASS} ${USER} mail | grep mail: | awk '{print $2}' | grep '.' | sed '/^$/d' | awk '!x[$0]++' >> ${EMAILS}
     [[ ${WITH_LDAP_BIND} = "no" ]] && ldapsearch -LLL -H ${URL} -b ${DN_USER_BRANCH},${DNBASE} -x ${USER} mail | grep mail: | awk '{print $2}' | grep '.' | sed '/^$/d' | awk '!x[$0]++' >> ${EMAILS}
-    LINES_NUMBER=$(cat ${EMAILS} | grep "." | wc -l) 
+    # Correction to support LDIF splitted lines, thanks to Guillaume Bougard (gbougard@pkg.fr)
+	perl -n -e 'chomp ; print "\n" unless (substr($_,0,1) eq " " || !defined($lines)); $_ =~ s/^\s+// ; print $_ ; $lines++;' -i "${EMAILS}"
+    # Decode if Base64 encoding is used
+	OLDIFS=$IFS; IFS=$'\n'
+	for LINE in $(cat ${EMAILS})
+	do
+		base64decode $LINE >> ${EMAILS_CLEAN}
+	done
+	IFS=$OLDIFS
+    LINES_NUMBER=$(cat ${EMAILS_CLEAN} | grep "." | wc -l) 
     echo -e "\tNumber of lines/emails: ${LINES_NUMBER}"
     # If no email -> skip
-    if [[ -z $(cat ${EMAILS}) ]] 
+    if [[ -z $(cat ${EMAILS_CLEAN}) ]] 
     	then
     	echo -e "\tPas d'email"
     # If only one mail, keep this mail
     elif [ ${LINES_NUMBER} -eq 1 ]
     	then
-    	PRINCIPAL_EMAIL=$(head -n 1 ${EMAILS})
+    	PRINCIPAL_EMAIL=$(head -n 1 ${EMAILS_CLEAN})
     	echo -e "\tOnly one email address: ${PRINCIPAL_EMAIL}"
     # If multiples mails
 	elif [ ${LINES_NUMBER} -gt 1 ]
@@ -295,22 +317,22 @@ do
     	if [[ -z ${DOMAIN} ]]
     		# No main domain defined -> keep first mail
     		then
-    		PRINCIPAL_EMAIL=$(head -n 1 ${EMAILS})
+    		PRINCIPAL_EMAIL=$(head -n 1 ${EMAILS_CLEAN})
 	    	echo -e "\t-> Keep first one: ${PRINCIPAL_EMAIL}"
 	    else
 	    	# Main domain defined -> search first mail in domain
-	    	cat ${EMAILS} | grep ${DOMAIN} > /dev/null 2>&1
+	    	cat ${EMAILS_CLEAN} | grep ${DOMAIN} > /dev/null 2>&1
 	    	if [ $? -ne 0 ]
 	    		then
-	    		PRINCIPAL_EMAIL=$(head -n 1 ${EMAILS})
+	    		PRINCIPAL_EMAIL=$(head -n 1 ${EMAILS_CLEAN})
 	    		echo -e "\t-> No email containing the main domain defined, we keep the first user email: ${PRINCIPAL_EMAIL}"		
 	    	else
-	    		PRINCIPAL_EMAIL=$(cat ${EMAILS} | grep ${DOMAIN} | head -n 1)
+	    		PRINCIPAL_EMAIL=$(cat ${EMAILS_CLEAN} | grep ${DOMAIN} | head -n 1)
 	    		echo -e "\t-> Email with main domain found: ${PRINCIPAL_EMAIL}"
 	    	fi
 	    fi
 	    # Creating list of address authorized to send email
-	    cat ${EMAILS} | grep -v ${PRINCIPAL_EMAIL} >> ${SECONDARY_EMAILS}
+	    cat ${EMAILS_CLEAN} | grep -v ${PRINCIPAL_EMAIL} >> ${SECONDARY_EMAILS}
 	    echo -e "\tAllowed senders list:"
 	    echo -e "\t-> $(cat ${SECONDARY_EMAILS} | perl -p -e 's/\n/ - /g' | awk 'sub( "...$", "" )')"
     fi
@@ -319,6 +341,7 @@ do
     [[ ! -z $(cat ${SECONDARY_EMAILS}) ]] && cat ${SECONDARY_EMAILS} >> ${LIST_SENDERS}
     # Remove email temp files 
     rm ${EMAILS}
+    rm ${EMAILS_CLEAN}
     rm ${SECONDARY_EMAILS}
     echo ""
 done
