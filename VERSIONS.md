@@ -10,6 +10,10 @@ Versions
 
 \! Known issue / missing feature
 
+#### 0.8
+------------
+\* add function to clean email addresses if aren't correct
+
 #### 0.7
 ------------
 \- add base64 decode if email addresses are base64 encoded in ldap

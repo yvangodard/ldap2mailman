@@ -10,7 +10,7 @@
 #              Yvan Godard                 #
 #          godardyvan@gmail.com            #
 #                                          #
-#     Version 0.7 -- january, 10 2015      #
+#     Version 0.8 -- january, 10 2015      #
 #             Under Licence                #
 #     Creative Commons 4.0 BY NC SA        #
 #                                          #
@@ -19,7 +19,7 @@
 #------------------------------------------#
 
 # Variables initialisation
-VERSION="LDAP2Mailman v0.7 - 2015, Yvan Godard [godardyvan@gmail.com]"
+VERSION="LDAP2Mailman v0.8 - 2015, Yvan Godard [godardyvan@gmail.com]"
 help="no"
 SCRIPT_DIR=$(dirname $0)
 SCRIPT_NAME=$(basename $0)
@@ -112,7 +112,7 @@ function base64decode () {
 		then
 		VALUE=$(echo ${1} | grep :: | awk '{print $2}' | openssl enc -base64 -d )
 		ATTRIBUTE=$(echo ${1} | grep :: | awk '{print $1}' | awk 'sub( ".$", "" )' )
-		echo "${ATTRIBUTE} ${VALUE}"
+		echo "${VALUE}"
 	else
 		echo ${1}
 	fi
@@ -285,19 +285,30 @@ do
 	PRINCIPAL_EMAIL=""
     echo "- Processing user: ${USER}"
     EMAILS=$(mktemp /tmp/mailman_emails.XXXXX)
+    EMAILS_CLEAN_TEMP=$(mktemp /tmp/mailman_emails_clean_tmp.XXXXX)
     EMAILS_CLEAN=$(mktemp /tmp/mailman_emails_clean.XXXXX)
     SECONDARY_EMAILS=$(mktemp /tmp/mailman_secondry_emails.XXXXX)
-    [[ ${WITH_LDAP_BIND} = "yes" ]] && ldapsearch -LLL -H ${URL} -D uid=${LDAPADMIN_UID},${DN_USER_BRANCH},${DNBASE} -b ${DN_USER_BRANCH},${DNBASE} -w ${PASS} ${USER} mail | grep mail: | awk '{print $2}' | grep '.' | sed '/^$/d' | awk '!x[$0]++' >> ${EMAILS}
-    [[ ${WITH_LDAP_BIND} = "no" ]] && ldapsearch -LLL -H ${URL} -b ${DN_USER_BRANCH},${DNBASE} -x ${USER} mail | grep mail: | awk '{print $2}' | grep '.' | sed '/^$/d' | awk '!x[$0]++' >> ${EMAILS}
+    [[ ${WITH_LDAP_BIND} = "yes" ]] && ldapsearch -LLL -H ${URL} -D uid=${LDAPADMIN_UID},${DN_USER_BRANCH},${DNBASE} -b ${DN_USER_BRANCH},${DNBASE} -w ${PASS} ${USER} mail | grep ^mail: >> ${EMAILS}
+    [[ ${WITH_LDAP_BIND} = "no" ]] && ldapsearch -LLL -H ${URL} -b ${DN_USER_BRANCH},${DNBASE} -x ${USER} mail | grep mail: >> ${EMAILS}
     # Correction to support LDIF splitted lines, thanks to Guillaume Bougard (gbougard@pkg.fr)
 	perl -n -e 'chomp ; print "\n" unless (substr($_,0,1) eq " " || !defined($lines)); $_ =~ s/^\s+// ; print $_ ; $lines++;' -i "${EMAILS}"
     # Decode if Base64 encoding is used
 	OLDIFS=$IFS; IFS=$'\n'
 	for LINE in $(cat ${EMAILS})
 	do
-		base64decode $LINE >> ${EMAILS_CLEAN}
+		base64decode $LINE >> ${EMAILS_CLEAN_TEMP}
 	done
 	IFS=$OLDIFS
+	# test if address are correct
+	for LINE in $(cat ${EMAILS_CLEAN_TEMP})
+	do
+		echo "${LINE}" | grep '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]*\.[a-zA-Z0-9._-]*$' > /dev/null 2>&1
+		if [ $? -ne 0 ]; then
+			echo "\tThis address '${LINE}' does not seem valid.\n\t-> We do not use this address."
+		else
+			echo "${LINE}" >> ${EMAILS_CLEAN}
+		fi
+	done
     LINES_NUMBER=$(cat ${EMAILS_CLEAN} | grep "." | wc -l) 
     echo -e "\tNumber of lines/emails: ${LINES_NUMBER}"
     # If no email -> skip
@@ -342,6 +353,7 @@ do
     # Remove email temp files 
     rm ${EMAILS}
     rm ${EMAILS_CLEAN}
+    rm ${EMAILS_CLEAN_TEMP}
     rm ${SECONDARY_EMAILS}
     echo ""
 done
