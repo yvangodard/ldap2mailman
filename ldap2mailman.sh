@@ -302,6 +302,7 @@ do
 	# test if address are correct
 	for LINE in $(cat ${EMAILS_CLEAN_TEMP})
 	do
+		echo "${LINE}"
 		echo "${LINE}" | grep '^[a-zA-Z0-9._-]*@[a-zA-Z0-9._-]*\.[a-zA-Z0-9._-]*$' > /dev/null 2>&1
 		if [ $? -ne 0 ]; then
 			echo "\tThis address '${LINE}' does not seem valid.\n\t-> We do not use this address."
