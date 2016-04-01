@@ -186,7 +186,7 @@ exec >> ${LOG_TEMP}
 
 # Start temp log file
 echo -e "\n****************************** `date` ******************************\n"
-echo -e "$0 started for Mailmman list ${LISTNAME}\n(LDAP group ${LDAPGROUP},${DNBASE})\n"
+echo -e "$0 started for Mailman list ${LISTNAME}\n(LDAP group ${LDAPGROUP},${DNBASE})\n"
 
 # Test of sending email parameter and check the consistency of the parameter email address
 if [[ ${EMAIL_REPORT} = "forcemail" ]]
@@ -469,6 +469,6 @@ fi
 echo ""
 
 echo "****************************** FINAL RESULT ******************************"
-echo -e "$0 finished for Mailmman list ${LISTNAME}\n(LDAP group ${LDAPGROUP},${DNBASE})"
+echo -e "$0 finished for Mailman list ${LISTNAME}\n(LDAP group ${LDAPGROUP},${DNBASE})"
 
 alldone 0
